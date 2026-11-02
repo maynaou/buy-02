@@ -2,6 +2,7 @@ package com.example.api_gateway.config;
 
 import java.util.Arrays;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
@@ -27,8 +28,13 @@ public class SecurityConfig {
 
     RsaKeysConfig rsaKeysConfig;
 
-    public SecurityConfig(RsaKeysConfig rsaKeysConfig) {
+    private final String allowedOrigins;
+
+    public SecurityConfig(
+            RsaKeysConfig rsaKeysConfig,
+            @Value("${app.cors.allowed.origins:https://localhost:4200}") String allowedOrigins) {
         this.rsaKeysConfig = rsaKeysConfig;
+        this.allowedOrigins = allowedOrigins;
     }
       
     @Bean
@@ -73,7 +79,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("https://localhost:4200"));
+        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

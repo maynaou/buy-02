@@ -38,6 +38,13 @@ cleanup_e2e_environment() {
 
 trap cleanup_e2e_environment EXIT
 
+cd "$repo_root/frontend"
+docker compose --project-name "$frontend_project" up --no-build -d --wait --wait-timeout 420
+
+frontend_address=$(docker compose --project-name "$frontend_project" port frontend 443)
+frontend_port="${frontend_address##*:}"
+export APP_CORS_ALLOWED_ORIGINS="https://localhost:${frontend_port}"
+
 cd "$repo_root/backend"
 docker compose --project-name "$backend_project" up --no-build -d --wait --wait-timeout 420
 
@@ -69,10 +76,6 @@ if [ "$status" != 400 ]; then
 fi
 
 cd "$repo_root/frontend"
-docker compose --project-name "$frontend_project" up --no-build -d --wait --wait-timeout 420
-
-frontend_address=$(docker compose --project-name "$frontend_project" port frontend 443)
-frontend_port="${frontend_address##*:}"
 
 docker_host_ip=$(getent hosts docker | awk 'NR == 1 { print $1 }')
 if [ -z "$docker_host_ip" ]; then

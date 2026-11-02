@@ -211,6 +211,7 @@ services:
     image: backend-api-gateway:${IMAGE_TAG:-latest}
     environment:
       SSL_PASSWORD: ${SSL_PASSWORD}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-https://localhost:4200}
     ports:
       - "${GATEWAY_HOST_PORT:-8888}:8888"
 

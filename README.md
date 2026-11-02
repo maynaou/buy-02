@@ -145,7 +145,10 @@ npm run e2e
 Le test E2E vérifie l’inscription d’un vendeur, sa connexion et la création
 d’un produit. Le pipeline Jenkins lance le scénario avec les conteneurs
 construits dans un projet Docker Compose isolé, puis supprime ce projet et son
-volume de données sans toucher aux conteneurs de l’application déployée.
+volume de données sans toucher aux conteneurs de l’application déployée. Le
+gateway E2E autorise uniquement l’origine HTTPS temporaire attribuée au
+frontend de test ; l’origine normale `https://localhost:4200` reste la valeur
+par défaut des autres déploiements.
 
 ## CI/CD et qualité
 
