@@ -144,7 +144,8 @@ npm run e2e
 
 Le test E2E vérifie l’inscription d’un vendeur, sa connexion et la création
 d’un produit. Le pipeline Jenkins lance le scénario avec les conteneurs
-construits et supprime les données créées par le test.
+construits dans un projet Docker Compose isolé, puis supprime ce projet et son
+volume de données sans toucher aux conteneurs de l’application déployée.
 
 ## CI/CD et qualité
 

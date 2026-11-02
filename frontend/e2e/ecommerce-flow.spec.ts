@@ -5,6 +5,13 @@ test('a seller can register, log in, and create a product', async ({ page }) => 
   const email = `${username}@example.test`;
   const password = 'password123';
   const productName = process.env['E2E_PRODUCT_NAME'] ?? `E2E Product ${Date.now()}`;
+  const gatewayPort = process.env['E2E_GATEWAY_PORT'] ?? '8888';
+
+  await page.route('https://localhost:8888/**', (route) => {
+    const url = new URL(route.request().url());
+    url.port = gatewayPort;
+    return route.continue({ url: url.toString() });
+  });
 
   await page.goto('/register');
   await page.getByLabel('Username').fill(username);

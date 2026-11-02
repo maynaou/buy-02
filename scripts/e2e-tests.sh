@@ -4,8 +4,45 @@ set -eu
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 image_tag="${IMAGE_TAG:-latest}"
 
+e2e_project_prefix="e2e-${BUILD_NUMBER:-0}-$$"
+backend_project="${e2e_project_prefix}-backend"
+frontend_project="${e2e_project_prefix}-frontend"
+export IMAGE_TAG="$image_tag"
+export KAFKA_HOST_PORT=0
+export DISCOVERY_HOST_PORT=0
+export GATEWAY_HOST_PORT=0
+export FRONTEND_HOST_PORT=0
+
+cleanup_e2e_environment() {
+    test_status=$?
+    trap - EXIT
+
+    cd "$repo_root/frontend"
+    if ! docker compose --project-name "$frontend_project" down --volumes --remove-orphans; then
+        echo "Failed to stop the isolated E2E frontend environment" >&2
+        if [ "$test_status" -eq 0 ]; then
+            test_status=1
+        fi
+    fi
+
+    cd "$repo_root/backend"
+    if ! docker compose --project-name "$backend_project" down --volumes --remove-orphans; then
+        echo "Failed to stop the isolated E2E backend environment" >&2
+        if [ "$test_status" -eq 0 ]; then
+            test_status=1
+        fi
+    fi
+
+    exit "$test_status"
+}
+
+trap cleanup_e2e_environment EXIT
+
 cd "$repo_root/backend"
-IMAGE_TAG="$image_tag" docker compose up --no-build -d --wait --wait-timeout 420
+docker compose --project-name "$backend_project" up --no-build -d --wait --wait-timeout 420
+
+gateway_address=$(docker compose --project-name "$backend_project" port api-gateway 8888)
+gateway_port="${gateway_address##*:}"
 
 attempts=0
 status=000
@@ -14,7 +51,7 @@ while [ "$attempts" -lt 60 ]; do
         --output /dev/null --write-out '%{http_code}' \
         --request POST --header 'Content-Type: application/json' \
         --data '{}' \
-        https://docker:8888/api/auth/register 2>/dev/null || true)
+        "https://docker:${gateway_port}/api/auth/register" 2>/dev/null || true)
     if [ "$status" = 400 ]; then
         break
     fi
@@ -32,7 +69,10 @@ if [ "$status" != 400 ]; then
 fi
 
 cd "$repo_root/frontend"
-IMAGE_TAG="$image_tag" docker compose up --no-build -d --wait --wait-timeout 420
+docker compose --project-name "$frontend_project" up --no-build -d --wait --wait-timeout 420
+
+frontend_address=$(docker compose --project-name "$frontend_project" port frontend 443)
+frontend_port="${frontend_address##*:}"
 
 docker_host_ip=$(getent hosts docker | awk 'NR == 1 { print $1 }')
 if [ -z "$docker_host_ip" ]; then
@@ -43,39 +83,9 @@ fi
 e2e_username="e2e$(date +%s%3N)"
 e2e_product_name="E2E Product $e2e_username"
 
-cleanup_e2e_data() {
-    test_status=$?
-    trap - EXIT
-    cd "$repo_root/backend"
-
-    if ! docker compose exec -T mongodb sh -c \
-        'mongosh --quiet --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --file /dev/stdin' <<MONGOSH
-const username = "$e2e_username";
-const productName = "$e2e_product_name";
-const authDb = db.getSiblingDB("auth-db");
-const authCollection = authDb.getCollection("auth");
-const auth = authCollection.findOne({ username: username }, { _id: 1 });
-
-db.getSiblingDB("product-db").getCollection("product").deleteMany({ name: productName });
-db.getSiblingDB("user-db").getCollection("users").deleteMany({ username: username });
-
-if (auth) {
-    authDb.getCollection("refreshToken").deleteMany({ userId: String(auth._id) });
-    authCollection.deleteMany({ _id: auth._id });
-}
-MONGOSH
-    then
-        echo "Failed to clean up E2E data for user $e2e_username" >&2
-        if [ "$test_status" -eq 0 ]; then
-            test_status=1
-        fi
-    fi
-
-    exit "$test_status"
-}
-
-trap cleanup_e2e_data EXIT
 E2E_USERNAME="$e2e_username" \
 E2E_PRODUCT_NAME="$e2e_product_name" \
 E2E_DOCKER_HOST_IP="$docker_host_ip" \
+E2E_GATEWAY_PORT="$gateway_port" \
+E2E_BASE_URL="https://localhost:${frontend_port}" \
 npm run e2e

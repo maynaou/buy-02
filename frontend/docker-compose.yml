@@ -5,9 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     image: frontend-app:${IMAGE_TAG:-latest}
-    container_name: frontend
     ports:
-      - "4200:443"
+      - "${FRONTEND_HOST_PORT:-4200}:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
     restart: always
