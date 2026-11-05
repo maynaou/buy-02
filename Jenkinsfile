@@ -172,21 +172,29 @@ stage('Backend SonarQube Analysis') {
                         passwordVariable: 'NEXUS_PASSWORD'
                     )
                 ]) {
-                    writeFile(
-                        file: 'nexus-maven-settings.xml',
-                        text: '''<settings>
+                    script {
+                        def escapeXml = { value ->
+                            value.replace('&', '&amp;')
+                                .replace('<', '&lt;')
+                                .replace('>', '&gt;')
+                                .replace('"', '&quot;')
+                                .replace("'", '&apos;')
+                        }
+                        try {
+                            writeFile(
+                                file: 'nexus-maven-settings.xml',
+                                text: """<settings>
   <servers>
     <server>
       <id>nexus-snapshots</id>
-      <username>${env.NEXUS_USERNAME}</username>
-      <password>${env.NEXUS_PASSWORD}</password>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
     </server>
   </servers>
 </settings>
-'''
-                    )
-                    try {
-                        script {
+"""
+                            )
+                            sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
                             BACKEND_SERVICES.each { service ->
                                 dir("backend/${service}") {
                                     sh '''
@@ -196,9 +204,9 @@ stage('Backend SonarQube Analysis') {
                                     '''
                                 }
                             }
+                        } finally {
+                            sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
                         }
-                    } finally {
-                        sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
                     }
                 }
             }
