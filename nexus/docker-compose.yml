@@ -1,0 +1,23 @@
+services:
+  nexus:
+    image: sonatype/nexus3:latest
+    networks:
+      jenkins:
+        aliases:
+          - nexus
+    ports:
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:8084:8084"
+    volumes:
+      - nexus_data:/nexus-data
+    restart: unless-stopped
+
+networks:
+  jenkins:
+    external: true
+    name: jenkins
+
+volumes:
+  nexus_data:

@@ -160,6 +160,50 @@ stage('Backend SonarQube Analysis') {
             }
         }
 
+        stage('Publish Backend Artifacts to Nexus') {
+            when {
+                branch 'main'
+            }
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
+                    writeFile(
+                        file: 'nexus-maven-settings.xml',
+                        text: '''<settings>
+  <servers>
+    <server>
+      <id>nexus-snapshots</id>
+      <username>${env.NEXUS_USERNAME}</username>
+      <password>${env.NEXUS_PASSWORD}</password>
+    </server>
+  </servers>
+</settings>
+'''
+                    )
+                    try {
+                        script {
+                            BACKEND_SERVICES.each { service ->
+                                dir("backend/${service}") {
+                                    sh '''
+                                        ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
+                                          -DskipTests \
+                                          -DaltSnapshotDeploymentRepository=nexus-snapshots::http://nexus:8081/repository/maven-snapshots/
+                                    '''
+                                }
+                            }
+                        }
+                    } finally {
+                        sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
+                    }
+                }
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 echo "🐳 Build Backend"

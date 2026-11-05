@@ -73,13 +73,17 @@ concurrentes, conserve les stashes récents et applique un timeout global de
    Angular avec la couverture activée.
 6. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
    Gate.
-7. **Docker Build** — construit les images backend et frontend, puis conserve
+7. **Publish Backend Artifacts to Nexus** — sur `main` uniquement, publie les
+   JARs des sept services backend dans `maven-snapshots`. Le credential Jenkins
+   `nexus-credentials` fournit l’authentification ; Nexus est joint sur
+   `http://nexus:8081`.
+8. **Docker Build** — construit les images backend et frontend, puis conserve
    le tag de build pour les étapes suivantes.
-8. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
+9. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
    avec les conteneurs construits. Le script attend que le Gateway réponde, lance
    Playwright et supprime les données créées par le test, y compris si le test
    échoue.
-9. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
+10. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
    déploiement et de rollback du dossier `scripts/`.
 
