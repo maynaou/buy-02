@@ -160,6 +160,58 @@ stage('Backend SonarQube Analysis') {
             }
         }
 
+        stage('Publish Backend Artifacts to Nexus') {
+            when {
+                branch 'main'
+            }
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
+                    script {
+                        def escapeXml = { value ->
+                            value.replace('&', '&amp;')
+                                .replace('<', '&lt;')
+                                .replace('>', '&gt;')
+                                .replace('"', '&quot;')
+                                .replace("'", '&apos;')
+                        }
+                        try {
+                            writeFile(
+                                file: 'nexus-maven-settings.xml',
+                                text: """<settings>
+  <servers>
+    <server>
+      <id>nexus-snapshots</id>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
+    </server>
+  </servers>
+</settings>
+"""
+                            )
+                            sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
+                            BACKEND_SERVICES.each { service ->
+                                dir("backend/${service}") {
+                                    sh '''
+                                        ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
+                                          -DskipTests \
+                                          -DaltSnapshotDeploymentRepository=nexus-snapshots::http://nexus:8081/repository/maven-snapshots/
+                                    '''
+                                }
+                            }
+                        } finally {
+                            sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Docker Build') {
             steps {
                 echo "🐳 Build Backend"

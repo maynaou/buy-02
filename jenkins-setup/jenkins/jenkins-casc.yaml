@@ -38,6 +38,13 @@ credentials:
               password: "${MONGO_PASSWORD}"
               description: "MongoDB root credentials"
 
+          - usernamePassword:
+              scope: GLOBAL
+              id: "nexus-credentials"
+              username: "${NEXUS_USERNAME}"
+              password: "${NEXUS_PASSWORD}"
+              description: "Compte de publication Nexus"
+
           - string:
               scope: GLOBAL
               id: "ssl-password"
