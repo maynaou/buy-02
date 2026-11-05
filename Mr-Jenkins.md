@@ -73,8 +73,10 @@ concurrentes, conserve les stashes récents et applique un timeout global de
    Angular avec la couverture activée.
 6. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
    Gate.
-7. **Publish Backend Artifacts to Nexus** — sur `main` uniquement, publie les
-   JARs des sept services backend dans `maven-snapshots`. Le credential Jenkins
+7. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
+   sept services backend dans `maven-snapshots`. Sur un tag de release
+   `vMAJOR.MINOR.PATCH`, publie les mêmes services dans `maven-releases` avec
+   une version Maven sans le préfixe `v`. Le credential Jenkins
    `nexus-credentials` fournit l’authentification ; Nexus est joint sur
    `http://nexus:8081`.
 8. **Docker Build** — construit les images backend et frontend, puis conserve
@@ -90,6 +92,21 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 Si une étape échoue, Jenkins arrête les étapes suivantes. Les rapports JUnit
 disponibles sont publiés à la fin du build et le pipeline envoie un courriel de
 succès ou d’échec.
+
+Pour publier une release, créez un tag SemVer sur le commit validé de `main`,
+puis poussez ce tag :
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Jenkins découvre les tags GitHub. Le pipeline valide le format
+`vMAJOR.MINOR.PATCH`, remplace temporairement la version Maven des POMs dans
+son workspace, puis publie les releases dans `maven-releases`. Les POMs du
+dépôt Git ne sont pas modifiés. Configurez pour `nexus-credentials` les droits
+`browse`, `read`, `add` et `edit` sur `maven-releases` ; le dépôt release doit
+refuser le redéploiement d’une version déjà publiée.
 
 ## Tests E2E dans DinD
 

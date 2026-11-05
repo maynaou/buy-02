@@ -162,7 +162,10 @@ stage('Backend SonarQube Analysis') {
 
         stage('Publish Backend Artifacts to Nexus') {
             when {
-                branch 'main'
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
             }
             steps {
                 withCredentials([
@@ -180,6 +183,15 @@ stage('Backend SonarQube Analysis') {
                                 .replace('"', '&quot;')
                                 .replace("'", '&apos;')
                         }
+                        def releaseTag = env.TAG_NAME
+                        def isRelease = releaseTag != null && !releaseTag.isEmpty()
+                        def releaseVersion
+                        if (isRelease) {
+                            if (!(releaseTag ==~ /^v\d+\.\d+\.\d+$/)) {
+                                error("Tag de release invalide : ${releaseTag}. Format attendu : vMAJOR.MINOR.PATCH (ex. v1.0.0).")
+                            }
+                            releaseVersion = releaseTag.substring(1)
+                        }
                         try {
                             writeFile(
                                 file: 'nexus-maven-settings.xml',
@@ -190,6 +202,11 @@ stage('Backend SonarQube Analysis') {
       <username>${escapeXml(env.NEXUS_USERNAME)}</username>
       <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
     </server>
+    <server>
+      <id>nexus-releases</id>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
+    </server>
   </servers>
 </settings>
 """
@@ -197,11 +214,25 @@ stage('Backend SonarQube Analysis') {
                             sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
                             BACKEND_SERVICES.each { service ->
                                 dir("backend/${service}") {
-                                    sh '''
-                                        ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
-                                          -DskipTests \
-                                          -DaltSnapshotDeploymentRepository=nexus-snapshots::http://nexus:8081/repository/maven-snapshots/
-                                    '''
+                                    if (isRelease) {
+                                        withEnv(["RELEASE_VERSION=${releaseVersion}"]) {
+                                            sh '''
+                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" \
+                                                  org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
+                                                  -DnewVersion="$RELEASE_VERSION" \
+                                                  -DgenerateBackupPoms=false
+                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
+                                                  -DskipTests \
+                                                  -DaltReleaseDeploymentRepository=nexus-releases::http://nexus:8081/repository/maven-releases/
+                                            '''
+                                        }
+                                    } else {
+                                        sh '''
+                                            ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
+                                              -DskipTests \
+                                              -DaltSnapshotDeploymentRepository=nexus-snapshots::http://nexus:8081/repository/maven-snapshots/
+                                        '''
+                                    }
                                 }
                             }
                         } finally {
