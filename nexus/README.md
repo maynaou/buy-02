@@ -367,6 +367,12 @@ les tests et les Quality Gates. Elle publie les sept services en utilisant le
 credential Jenkins `nexus-credentials` et l’adresse réseau interne
 `http://nexus:8081`.
 
+Pour publier une version stable, pousse un tag Git au format `vMAJOR.MINOR.PATCH`
+(par exemple `v1.0.0`). Jenkins retire le `v` pour définir la version Maven et
+publie dans `maven-releases`. Le compte de publication doit aussi posséder les
+privilèges `browse`, `read`, `add` et `edit` sur ce dépôt. Les versions releases
+étant immuables, un tag déjà publié ne peut pas être redéployé.
+
 ## Configuration Docker Compose
 
 Le fichier [`docker-compose.yml`](./docker-compose.yml) configure les éléments

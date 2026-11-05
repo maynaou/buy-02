@@ -120,15 +120,15 @@ unclassified:
 
 jobs:
   - script: >
-      multibranchPipelineJob('buy-01-pipeline') {
+      multibranchPipelineJob('buy-02-pipeline') {
         branchSources {
           branchSource {
             source {
               github {
-                id('buy-01-github-source')
+                id('buy-02-github-source')
                 repoOwner('maynaou')
-                repository('buy-01')
-                repositoryUrl('https://github.com/maynaou/buy-01')
+                repository('buy-02')
+                repositoryUrl('https://github.com/maynaou/buy-02')
                 configuredByUrl(false)
                 credentialsId('github-creds')
 
@@ -139,6 +139,7 @@ jobs:
                   gitHubPullRequestDiscovery {
                     strategyId(1)
                   }
+                  gitHubTagDiscovery()
                 }
               }
             }
