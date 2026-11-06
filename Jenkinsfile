@@ -47,12 +47,6 @@ pipeline {
             }
         }
 
-        stage('Prepare Nexus Maven Settings') {
-            steps {
-                sh 'chmod 600 "$WORKSPACE/settings.xml"'
-            }
-        }
-
         stage('Prepare Secrets') {
             steps {
                 withCredentials([
@@ -104,41 +98,41 @@ pipeline {
             }
         }
 
-stage('Backend SonarQube Analysis') {
-    steps {
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'nexus-credentials',
-                usernameVariable: 'NEXUS_CI_USER',
-                passwordVariable: 'NEXUS_CI_PASSWORD'
-            )
-        ]) {
-            withEnv(['NEXUS_URL=http://nexus:8081']) {
-                script {
-                    BACKEND_SERVICES.each { service ->
-                        dir("backend/${service}") {
-                            echo "🔎 SonarQube: ${service}"
+        stage('Backend SonarQube Analysis') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_CI_USER',
+                        passwordVariable: 'NEXUS_CI_PASSWORD'
+                    )
+                ]) {
+                    withEnv(['NEXUS_URL=http://nexus:8081']) {
+                        script {
+                            BACKEND_SERVICES.each { service ->
+                                dir("backend/${service}") {
+                                    echo "🔎 SonarQube: ${service}"
 
-                            withSonarQubeEnv('SonarQube') {
-                                sh """
-                                    ./mvnw -s "$WORKSPACE/settings.xml" \
-                                    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                                    -Dsonar.projectKey=buy-02-${service} \
-                                    -Dsonar.projectName=buy-02-${service} \
-                                    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-                                """
-                            }
+                                    withSonarQubeEnv('SonarQube') {
+                                        sh """
+                                            ./mvnw -s "$WORKSPACE/settings.xml" \
+                                            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                                            -Dsonar.projectKey=buy-02-${service} \
+                                            -Dsonar.projectName=buy-02-${service} \
+                                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                                        """
+                                    }
 
-                            timeout(time: 5, unit: 'MINUTES') {
-                                waitForQualityGate abortPipeline: true
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        waitForQualityGate abortPipeline: true
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
 
         stage('Frontend Unit & Integration Tests') {
             steps {
@@ -165,8 +159,8 @@ stage('Backend SonarQube Analysis') {
                             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                         '''
                     }
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
                     }
                 }
             }
@@ -234,17 +228,7 @@ stage('Backend SonarQube Analysis') {
                         passwordVariable: 'NEXUS_PASSWORD'
                     )
                 ]) {
-                    sh '''
-                        set +x
-                        registry=nexus:8084
-                        printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
-                          --username "$NEXUS_USERNAME" --password-stdin
-                        trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
-                        (cd backend && IMAGE_TAG="$IMAGE_TAG" docker compose build)
-                        (cd frontend && docker build \
-                          --build-arg "DOCKERHUB_PROXY=$NEXUS_DOCKER_PROXY" \
-                          -t "frontend-app:$IMAGE_TAG" .)
-                    '''
+                    sh 'bash ./scripts/build-docker-images.sh'
                 }
 
                 script {
@@ -271,14 +255,7 @@ stage('Backend SonarQube Analysis') {
                         passwordVariable: 'NEXUS_PASSWORD'
                     )
                 ]) {
-                    sh '''
-                        set +x
-                        registry=nexus:8084
-                        printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
-                          --username "$NEXUS_USERNAME" --password-stdin
-                        trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
-                        bash ./scripts/e2e-tests.sh
-                    '''
+                    sh 'bash ./scripts/run-e2e-tests-with-nexus.sh'
                 }
             }
         }
@@ -302,43 +279,7 @@ stage('Backend SonarQube Analysis') {
                         unstash 'docker-image-tag'
                         def nexusDockerTag = readFile('nexus-docker-tag.txt').trim()
                         withEnv(["NEXUS_DOCKER_TAG=${nexusDockerTag}"]) {
-                            def pushStatus = sh(
-                                returnStatus: true,
-                                script: '''
-                                    set +x
-                                    registry=nexus:8082
-                                    printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
-                                      --username "$NEXUS_USERNAME" --password-stdin
-                                    trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
-
-                                    push_status=0
-                                    for image in \
-                                      backend-api-gateway \
-                                      backend-discovery-service \
-                                      backend-media-service \
-                                      backend-product-service \
-                                      backend-security-service \
-                                      backend-user-service \
-                                      backend-order-service \
-                                      frontend-app
-                                    do
-                                      docker tag "$image:$IMAGE_TAG" \
-                                        "$registry/buy-02/$image:$NEXUS_DOCKER_TAG" || {
-                                          push_status=$?
-                                          break
-                                        }
-                                      docker push "$registry/buy-02/$image:$NEXUS_DOCKER_TAG" || {
-                                          push_status=$?
-                                          break
-                                        }
-                                    done
-
-                                    exit "$push_status"
-                                '''
-                            )
-                            if (pushStatus != 0) {
-                                error("La publication des images Docker dans Nexus a échoué (code ${pushStatus}).")
-                            }
+                            sh 'bash ./scripts/publish-docker-images.sh'
                         }
                     }
                 }
@@ -421,7 +362,6 @@ stage('Backend SonarQube Analysis') {
                 }
             }
         }
-    }
 
     post {
         always {
@@ -461,4 +401,6 @@ stage('Backend SonarQube Analysis') {
             )
         }
     }
+}
+
 }

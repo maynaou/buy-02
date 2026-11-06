@@ -62,40 +62,40 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 30 minutes.
 
 1. **Checkout** — récupère la révision sélectionnée par le job multibranch.
-2. **Prepare Nexus Maven Settings** — utilise le fichier versionné
-   [`settings.xml`](./settings.xml), qui définit `maven-public` comme miroir ;
-   Jenkins fournit l’URL et les credentials via variables d’environnement.
-3. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
+2. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
    configuration Cloudinary à partir des credentials Jenkins via
    [`scripts/prepare-secrets.sh`](./scripts/prepare-secrets.sh).
-4. **Backend Unit & Integration Tests** — lance `./mvnw clean package` via le
+3. **Backend Unit & Integration Tests** — lance `./mvnw clean package` via le
    miroir Nexus pour les sept services backend, un à la fois pour éviter de
    surcharger le daemon Docker partagé par Testcontainers. Les JAR testés sont
    réutilisés pour construire les images runtime.
-5. **Backend SonarQube Analysis** — analyse les sept services et attend leur
+4. **Backend SonarQube Analysis** — analyse les sept services et attend leur
    Quality Gate.
-6. **Frontend Unit & Integration Tests** — exécute `npm ci`, puis les tests
+5. **Frontend Unit & Integration Tests** — exécute `npm ci`, puis les tests
    Angular avec la couverture activée.
-7. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
+6. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
    Gate.
-8. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
-   sept services backend dans    `maven-snapshots`. Chaque POM définit `distributionManagement`, de sorte que
+7. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
+   sept services backend dans `maven-snapshots`. Chaque POM définit
+   `distributionManagement`, de sorte que
    Maven choisit le dépôt selon la version. Sur un tag de release
    `vMAJOR.MINOR.PATCH`, publie les mêmes services dans `maven-releases` avec
    une version Maven sans le préfixe `v`. Le credential Jenkins
    `nexus-credentials` fournit l’authentification ; Nexus est joint sur
    `http://nexus:8081`.
-9. **Docker Build** — construit les images backend et frontend, puis conserve
-   le tag de build pour les étapes suivantes. Les images de base et les images
-   Kafka/MongoDB passent par le groupe proxy `docker-public` sur `nexus:8084`.
-10. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
-   avec les conteneurs construits. Le script attend que le Gateway réponde, lance
-   Playwright et supprime les données créées par le test, y compris si le test
-   échoue.
-11. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
-   les huit images applicatives dans `docker-hosted` sur `main` et sur les tags
-   de release. Les images `main` sont taguées avec le commit et le numéro de
-   build (`main-<sha>-<build>`),
+8. **Docker Build** — exécute
+   [`scripts/build-docker-images.sh`](./scripts/build-docker-images.sh), puis
+   conserve le tag de build pour les étapes suivantes. Les images de base et
+   les images Kafka/MongoDB passent par `docker-public` sur `nexus:8084`.
+9. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
+   via [`scripts/run-e2e-tests-with-nexus.sh`](./scripts/run-e2e-tests-with-nexus.sh),
+   qui gère l’accès au proxy Docker. Le test attend que le Gateway réponde, lance
+   Playwright et supprime les données créées, même en cas d’échec.
+10. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
+   les huit images applicatives avec
+   [`scripts/publish-docker-images.sh`](./scripts/publish-docker-images.sh)
+   dans `docker-hosted` sur `main` et sur les tags de release. Les images `main`
+   sont taguées avec le commit et le numéro de build (`main-<sha>-<build>`),
    celles d'une release avec sa version (`1.0.0`). Le daemon Docker-in-Docker
    est configuré pour joindre le connecteur HTTP interne `nexus:8082`. Le
    credential `nexus-credentials` doit avoir les privilèges `browse`, `read`,
@@ -108,7 +108,7 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 
    Le même credential doit aussi avoir le droit `read` sur `docker-public`.
 
-12. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
+11. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
    déploiement et de rollback du dossier `scripts/`. Avant le démarrage, chaque
    script télécharge depuis `docker-hosted` les images de sa version publiée
@@ -120,6 +120,10 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 Si une étape échoue, Jenkins arrête les étapes suivantes. Les rapports JUnit
 disponibles sont publiés à la fin du build et le pipeline envoie un courriel de
 succès ou d’échec.
+
+Maven utilise [`settings.xml`](./settings.xml), qui dirige la résolution vers
+`maven-public`. Jenkins fournit l’URL Nexus et les identifiants au moment des
+commandes Maven via les credentials `nexus-credentials`.
 
 Pour publier une release, créez un tag SemVer sur le commit validé de `main`,
 puis poussez ce tag :
