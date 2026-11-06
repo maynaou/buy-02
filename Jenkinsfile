@@ -257,11 +257,17 @@ stage('Backend SonarQube Analysis') {
                     sh 'docker build -t frontend-app:${IMAGE_TAG} .'
                 }
 
-                sh 'echo "${IMAGE_TAG}" > image-tag.txt'
-                
+                script {
+                    def dockerTag = env.TAG_NAME
+                        ? env.TAG_NAME.substring(1)
+                        : "main-${env.GIT_COMMIT.take(12)}-${env.BUILD_NUMBER}"
+                    writeFile file: 'image-tag.txt', text: "${env.IMAGE_TAG}\n"
+                    writeFile file: 'nexus-docker-tag.txt', text: "${dockerTag}\n"
+                }
+
                 stash(
                     name: 'docker-image-tag',
-                    includes: 'image-tag.txt'
+                    includes: 'image-tag.txt,nexus-docker-tag.txt'
                 )
             }
         }
@@ -288,8 +294,9 @@ stage('Backend SonarQube Analysis') {
                     )
                 ]) {
                     script {
-                        def dockerTag = env.TAG_NAME ? env.TAG_NAME.substring(1) : "main-${env.GIT_COMMIT.take(12)}-${env.BUILD_NUMBER}"
-                        withEnv(["NEXUS_DOCKER_TAG=${dockerTag}"]) {
+                        unstash 'docker-image-tag'
+                        def nexusDockerTag = readFile('nexus-docker-tag.txt').trim()
+                        withEnv(["NEXUS_DOCKER_TAG=${nexusDockerTag}"]) {
                             def pushStatus = sh(
                                 returnStatus: true,
                                 script: '''
@@ -345,12 +352,26 @@ stage('Backend SonarQube Analysis') {
                 script {
                     unstash 'docker-image-tag'
                     def deployTag = readFile('image-tag.txt').trim()
-                    echo "📦 Version à déployer : ${deployTag}"
-                    try {
-                        sh "IMAGE_TAG=${deployTag} bash ./scripts/deploy-backend.sh"
-                    } catch (err) {
-                        sh "IMAGE_TAG=${deployTag} bash ./scripts/rollback-backend.sh"
-                        error("❌ Déploiement Backend échoué — rollback exécuté")
+                    def nexusDockerTag = readFile('nexus-docker-tag.txt').trim()
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'nexus-credentials',
+                            usernameVariable: 'NEXUS_USERNAME',
+                            passwordVariable: 'NEXUS_PASSWORD'
+                        )
+                    ]) {
+                        withEnv([
+                            "IMAGE_TAG=${deployTag}",
+                            "NEXUS_DOCKER_TAG=${nexusDockerTag}"
+                        ]) {
+                            echo "📦 Version à déployer : ${nexusDockerTag} depuis Nexus"
+                            try {
+                                sh 'bash ./scripts/deploy-backend.sh'
+                            } catch (err) {
+                                sh 'bash ./scripts/rollback-backend.sh'
+                                error("❌ Déploiement Backend échoué — rollback exécuté")
+                            }
+                        }
                     }
                 }
             }
@@ -364,12 +385,26 @@ stage('Backend SonarQube Analysis') {
                 script {
                     unstash 'docker-image-tag'
                     def deployTag = readFile('image-tag.txt').trim()
-                    echo "📦 Version Frontend à déployer : ${deployTag}"
-                    try {
-                        sh "IMAGE_TAG=${deployTag} bash ./scripts/deploy-frontend.sh"
-                    } catch (err) {
-                        sh "IMAGE_TAG=${deployTag} bash ./scripts/rollback-frontend.sh"
-                        error("❌ Déploiement Frontend échoué — rollback exécuté")
+                    def nexusDockerTag = readFile('nexus-docker-tag.txt').trim()
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'nexus-credentials',
+                            usernameVariable: 'NEXUS_USERNAME',
+                            passwordVariable: 'NEXUS_PASSWORD'
+                        )
+                    ]) {
+                        withEnv([
+                            "IMAGE_TAG=${deployTag}",
+                            "NEXUS_DOCKER_TAG=${nexusDockerTag}"
+                        ]) {
+                            echo "📦 Version Frontend à déployer : ${nexusDockerTag} depuis Nexus"
+                            try {
+                                sh 'bash ./scripts/deploy-frontend.sh'
+                            } catch (err) {
+                                sh 'bash ./scripts/rollback-frontend.sh'
+                                error("❌ Déploiement Frontend échoué — rollback exécuté")
+                            }
+                        }
                     }
                 }
             }

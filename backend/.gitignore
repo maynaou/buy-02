@@ -1,2 +1,4 @@
 .vscode/
 .env
+.last-good-version
+.last-good-nexus-tag

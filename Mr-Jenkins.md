@@ -101,7 +101,12 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 
 11. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
-   déploiement et de rollback du dossier `scripts/`.
+   déploiement et de rollback du dossier `scripts/`. Avant le démarrage, chaque
+   script télécharge depuis `docker-hosted` les images de sa version publiée
+   (JAR déjà inclus dans les images), les retague au format local du Compose,
+   puis démarre les conteneurs. Les tags Nexus de la dernière version saine sont
+   conservés pour permettre un rollback en téléchargeant à nouveau les images
+   correspondantes depuis Nexus.
 
 Si une étape échoue, Jenkins arrête les étapes suivantes. Les rapports JUnit
 disponibles sont publiés à la fin du build et le pipeline envoie un courriel de

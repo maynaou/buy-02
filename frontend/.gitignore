@@ -6,6 +6,8 @@
 /out-tsc
 /bazel-out
 /certs
+/.last-good-version
+/.last-good-nexus-tag
 
 # Node
 /node_modules
