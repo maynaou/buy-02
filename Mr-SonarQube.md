@@ -108,9 +108,10 @@ Tests E2E
 Déploiement sur main
 ```
 
-Les analyses backend sont lancées en parallèle par le Jenkinsfile. Les étapes
-de build Docker, E2E et déploiement ne sont atteintes que si les tests et
-Quality Gates précédents réussissent.
+Les analyses backend et leurs Quality Gates sont exécutées l’une après l’autre
+par le Jenkinsfile afin d’éviter de surcharger SonarQube et de garder chaque
+résultat associé à son analyse. Les étapes de build Docker, E2E et déploiement
+ne sont atteintes que si les tests et Quality Gates précédents réussissent.
 
 ## Diagnostic
 

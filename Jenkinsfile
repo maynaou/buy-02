@@ -144,37 +144,25 @@ pipeline {
 stage('Backend SonarQube Analysis') {
     steps {
         script {
-
-            def analyses = [:]
-
             BACKEND_SERVICES.each { service ->
+                dir("backend/${service}") {
+                    echo "🔎 SonarQube: ${service}"
 
-                analyses[service] = {
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            ./mvnw -s "$WORKSPACE/nexus-maven-settings.xml" \
+                            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                            -Dsonar.projectKey=buy-02-${service} \
+                            -Dsonar.projectName=buy-02-${service} \
+                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                        """
+                    }
 
-                    dir("backend/${service}") {
-
-                        echo "🔎 SonarQube: ${service}"
-
-                        withSonarQubeEnv('SonarQube') {
-                            sh """
-                                ./mvnw -s "$WORKSPACE/nexus-maven-settings.xml" \
-                                org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                                -Dsonar.projectKey=buy-02-${service} \
-                                -Dsonar.projectName=buy-02-${service} \
-                                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-                            """
-                        }
-
-                        timeout(time: 5, unit: 'MINUTES') {
-                            waitForQualityGate abortPipeline: true
-                        }
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
                     }
                 }
             }
-
-            analyses.failFast = true
-
-            parallel analyses
         }
     }
 }
