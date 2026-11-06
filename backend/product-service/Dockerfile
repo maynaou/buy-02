@@ -1,18 +1,9 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+ARG DOCKERHUB_PROXY=docker.io
+FROM ${DOCKERHUB_PROXY}/library/eclipse-temurin:17-jre
 
 WORKDIR /app
 
-COPY pom.xml .
-
-COPY src ./src
-
-RUN mvn clean package -DskipTests
-
-FROM eclipse-temurin:17-jre
-
-WORKDIR /app
-
-COPY --from=build /app/target/*.jar app.jar
+COPY target/*.jar app.jar
 
 # EXPOSE 8082
 

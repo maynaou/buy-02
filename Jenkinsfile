@@ -14,7 +14,8 @@ pipeline {
     agent any
 
     environment {
-              IMAGE_TAG = "build-${BUILD_NUMBER}"
+        IMAGE_TAG = "build-${BUILD_NUMBER}"
+        NEXUS_DOCKER_PROXY = "nexus:8084"
     }
 
     options {
@@ -43,6 +44,59 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Prepare Nexus Maven Settings') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
+                    script {
+                        def escapeXml = { value ->
+                            value.replace('&', '&amp;')
+                                .replace('<', '&lt;')
+                                .replace('>', '&gt;')
+                                .replace('"', '&quot;')
+                                .replace("'", '&apos;')
+                        }
+                        writeFile(
+                            file: 'nexus-maven-settings.xml',
+                            text: """<settings>
+  <mirrors>
+    <mirror>
+      <id>nexus-maven-public</id>
+      <mirrorOf>*</mirrorOf>
+      <url>http://nexus:8081/repository/maven-public/</url>
+    </mirror>
+  </mirrors>
+  <servers>
+    <server>
+      <id>nexus-maven-public</id>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
+    </server>
+    <server>
+      <id>nexus-snapshots</id>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
+    </server>
+    <server>
+      <id>nexus-releases</id>
+      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
+      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
+    </server>
+  </servers>
+</settings>
+"""
+                        )
+                        sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
+                    }
+                }
             }
         }
 
@@ -81,7 +135,7 @@ pipeline {
                     def tests = [:]
                     BACKEND_SERVICES.each {  service -> tests[service] = {
                         dir("backend/${service}") {
-                            sh './mvnw clean test'
+                            sh './mvnw -s "$WORKSPACE/nexus-maven-settings.xml" clean package'
                         }
                     }
                 }
@@ -107,7 +161,8 @@ stage('Backend SonarQube Analysis') {
 
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                                ./mvnw -s "$WORKSPACE/nexus-maven-settings.xml" \
+                                org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
                                 -Dsonar.projectKey=buy-02-${service} \
                                 -Dsonar.projectName=buy-02-${service} \
                                 -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
@@ -176,13 +231,6 @@ stage('Backend SonarQube Analysis') {
                     )
                 ]) {
                     script {
-                        def escapeXml = { value ->
-                            value.replace('&', '&amp;')
-                                .replace('<', '&lt;')
-                                .replace('>', '&gt;')
-                                .replace('"', '&quot;')
-                                .replace("'", '&apos;')
-                        }
                         def releaseTag = env.TAG_NAME
                         def isRelease = releaseTag != null && !releaseTag.isEmpty()
                         def releaseVersion
@@ -193,25 +241,6 @@ stage('Backend SonarQube Analysis') {
                             releaseVersion = releaseTag.substring(1)
                         }
                         try {
-                            writeFile(
-                                file: 'nexus-maven-settings.xml',
-                                text: """<settings>
-  <servers>
-    <server>
-      <id>nexus-snapshots</id>
-      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
-      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
-    </server>
-    <server>
-      <id>nexus-releases</id>
-      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
-      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
-    </server>
-  </servers>
-</settings>
-"""
-                            )
-                            sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
                             BACKEND_SERVICES.each { service ->
                                 dir("backend/${service}") {
                                     if (isRelease) {
@@ -221,7 +250,7 @@ stage('Backend SonarQube Analysis') {
                                                   org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
                                                   -DnewVersion="$RELEASE_VERSION" \
                                                   -DgenerateBackupPoms=false
-                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
+                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" clean deploy \
                                                   -DskipTests \
                                                   -DaltReleaseDeploymentRepository=nexus-releases::http://nexus:8081/repository/maven-releases/
                                             '''
@@ -245,16 +274,24 @@ stage('Backend SonarQube Analysis') {
 
         stage('Docker Build') {
             steps {
-                echo "🐳 Build Backend"
-                dir('backend') {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
                     sh '''
-                        IMAGE_TAG=$IMAGE_TAG docker compose build
+                        set +x
+                        registry=nexus:8084
+                        printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
+                          --username "$NEXUS_USERNAME" --password-stdin
+                        trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
+                        (cd backend && IMAGE_TAG="$IMAGE_TAG" docker compose build)
+                        (cd frontend && docker build \
+                          --build-arg "DOCKERHUB_PROXY=$NEXUS_DOCKER_PROXY" \
+                          -t "frontend-app:$IMAGE_TAG" .)
                     '''
-                }
-                echo "🐳 Build Frontend"
-        
-                dir('frontend') {
-                    sh 'docker build -t frontend-app:${IMAGE_TAG} .'
                 }
 
                 script {
@@ -274,7 +311,22 @@ stage('Backend SonarQube Analysis') {
 
         stage('End-to-End Tests') {
             steps {
-                sh 'bash ./scripts/e2e-tests.sh'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        registry=nexus:8084
+                        printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
+                          --username "$NEXUS_USERNAME" --password-stdin
+                        trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
+                        bash ./scripts/e2e-tests.sh
+                    '''
+                }
             }
         }
 
@@ -304,6 +356,7 @@ stage('Backend SonarQube Analysis') {
                                     registry=nexus:8082
                                     printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
                                       --username "$NEXUS_USERNAME" --password-stdin
+                                    trap 'docker logout "$registry" >/dev/null 2>&1 || true' EXIT
 
                                     push_status=0
                                     for image in \
@@ -327,12 +380,7 @@ stage('Backend SonarQube Analysis') {
                                         }
                                     done
 
-                                    docker logout "$registry" >/dev/null
-                                    logout_status=$?
-                                    if [ "$push_status" -ne 0 ]; then
-                                      exit "$push_status"
-                                    fi
-                                    exit "$logout_status"
+                                    exit "$push_status"
                                 '''
                             )
                             if (pushStatus != 0) {
@@ -424,6 +472,7 @@ stage('Backend SonarQube Analysis') {
 
     post {
         always {
+            sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
             junit(
                 allowEmptyResults: true,
                 testResults:

@@ -88,14 +88,20 @@ Ne placez pas de secrets réels dans les fichiers suivis par Git.
 
 1. Configurez les variables Compose et les clés/certificats requis. Les
    paramètres backend sont documentés dans le [README backend](./backend/README.md).
-2. Démarrez les services backend :
+2. Construisez les JAR backend, nécessaires aux images Docker :
+
+   ```bash
+   bash ./scripts/package-backend.sh
+   ```
+
+3. Démarrez les services backend :
 
    ```bash
    cd backend
    docker compose up --build -d
    ```
 
-3. Depuis un autre terminal, démarrez le frontend conteneurisé :
+4. Depuis un autre terminal, démarrez le frontend conteneurisé :
 
    ```bash
    cd frontend

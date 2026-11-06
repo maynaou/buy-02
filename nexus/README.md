@@ -191,6 +191,13 @@ http://localhost:8081/repository/maven-public/
 `maven-public` sert à **résoudre** les dépendances. Pour publier un artefact,
 utilise directement le dépôt hosted correspondant à sa version.
 
+Le pipeline Jenkins configure `maven-public` comme miroir Maven (`mirrorOf=*`)
+pour les tests, les analyses Maven et les publications. Le compte
+`nexus-credentials` doit avoir le droit `read` sur `maven-public`, ainsi que les
+droits de publication sur les dépôts hosted concernés. Les commandes Maven du
+pipeline passent ainsi par Nexus plutôt que de télécharger directement depuis
+Maven Central.
+
 ### 2.2 Dépôts Docker
 
 Le connecteur Docker utilise un port par dépôt. Le fichier
@@ -215,6 +222,13 @@ Si l’écran de configuration du proxy propose **Docker Index**, choisis
 **Use Docker Hub**. Ne configure pas de compte Docker Hub pour le cache public
 de base. Laisse les autres paramètres à leur valeur par défaut pour cette
 installation locale.
+
+Pour le pipeline, accorde également à `nexus-credentials` le droit `read` sur
+`docker-public`. Les Dockerfiles et Compose utilisent le connecteur du groupe
+`nexus:8084` pour les images de base et les images publiques Kafka/MongoDB.
+Jenkins s’authentifie à ce groupe avant les builds et les tests ; Nexus met les
+images en cache lors du premier téléchargement. Le daemon Docker-in-Docker est
+configuré pour accepter ce connecteur HTTP.
 
 Adresses des dépôts Docker :
 
@@ -320,18 +334,42 @@ pour récupérer et mettre en cache les dépendances externes.
 ## Étape 3 — Créer le JAR et le publier sur Nexus
 
 Les services backend de ce projet sont des applications Spring Boot empaquetées
-en JAR (aucun service ne configure le packaging WAR). Leurs versions actuelles
+en JAR (aucun service ne configure le packaging WAR). Le pipeline construit et
+teste les JAR avec Maven via `maven-public`, puis copie ces mêmes JAR dans les
+images runtime Java ; les images ne reconstruisent pas les services en
+contournant le cache Maven. Pour un build local, `bash ./scripts/package-backend.sh`
+construit les JAR avant `docker compose up --build`. Leurs versions actuelles
 finissent par `-SNAPSHOT` : publie-les donc dans `maven-snapshots`.
 
 Configure d’abord `~/.m2/settings.xml` avec un compte Nexus autorisé à publier.
-L’identifiant du serveur doit correspondre à `nexus-snapshots` utilisé plus bas.
-Ne commite pas ce fichier ni les identifiants :
+Le miroir fait passer la résolution Maven par `maven-public` ; les IDs des
+serveurs d’authentification doivent correspondre aux IDs utilisés pour la
+résolution et le déploiement. Ne commite pas ce fichier ni les identifiants.
+Pour une installation locale, utilise `localhost`; Jenkins utilise le nom
+interne `nexus` :
 
 ```xml
 <settings>
+  <mirrors>
+    <mirror>
+      <id>nexus-maven-public</id>
+      <mirrorOf>*</mirrorOf>
+      <url>http://localhost:8081/repository/maven-public/</url>
+    </mirror>
+  </mirrors>
   <servers>
     <server>
+      <id>nexus-maven-public</id>
+      <username>UTILISATEUR_NEXUS</username>
+      <password>MOT_DE_PASSE_NEXUS</password>
+    </server>
+    <server>
       <id>nexus-snapshots</id>
+      <username>UTILISATEUR_NEXUS</username>
+      <password>MOT_DE_PASSE_NEXUS</password>
+    </server>
+    <server>
+      <id>nexus-releases</id>
       <username>UTILISATEUR_NEXUS</username>
       <password>MOT_DE_PASSE_NEXUS</password>
     </server>

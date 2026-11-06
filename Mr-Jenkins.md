@@ -62,30 +62,35 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 30 minutes.
 
 1. **Checkout** — récupère la révision sélectionnée par le job multibranch.
-2. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
+2. **Prepare Nexus Maven Settings** — crée un `settings.xml` temporaire avec
+   `maven-public` comme miroir de tous les dépôts Maven et les credentials de
+   lecture/publication. Le fichier est supprimé à la fin du build.
+3. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
    configuration Cloudinary à partir des credentials Jenkins via
    [`scripts/prepare-secrets.sh`](./scripts/prepare-secrets.sh).
-3. **Backend Unit & Integration Tests** — lance `./mvnw clean test` en parallèle
-   pour les sept services backend.
-4. **Backend SonarQube Analysis** — analyse les sept services et attend leur
+4. **Backend Unit & Integration Tests** — lance `./mvnw clean package` en
+   parallèle via le miroir Nexus pour les sept services backend. Les JAR testés
+   sont réutilisés pour construire les images runtime.
+5. **Backend SonarQube Analysis** — analyse les sept services et attend leur
    Quality Gate.
-5. **Frontend Unit & Integration Tests** — exécute `npm ci`, puis les tests
+6. **Frontend Unit & Integration Tests** — exécute `npm ci`, puis les tests
    Angular avec la couverture activée.
-6. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
+7. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
    Gate.
-7. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
+8. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
    sept services backend dans `maven-snapshots`. Sur un tag de release
    `vMAJOR.MINOR.PATCH`, publie les mêmes services dans `maven-releases` avec
    une version Maven sans le préfixe `v`. Le credential Jenkins
    `nexus-credentials` fournit l’authentification ; Nexus est joint sur
    `http://nexus:8081`.
-8. **Docker Build** — construit les images backend et frontend, puis conserve
-   le tag de build pour les étapes suivantes.
-9. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
+9. **Docker Build** — construit les images backend et frontend, puis conserve
+   le tag de build pour les étapes suivantes. Les images de base et les images
+   Kafka/MongoDB passent par le groupe proxy `docker-public` sur `nexus:8084`.
+10. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
    avec les conteneurs construits. Le script attend que le Gateway réponde, lance
    Playwright et supprime les données créées par le test, y compris si le test
    échoue.
-10. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
+11. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
    les huit images applicatives dans `docker-hosted` sur `main` et sur les tags
    de release. Les images `main` sont taguées avec le commit et le numéro de
    build (`main-<sha>-<build>`),
@@ -99,7 +104,9 @@ concurrentes, conserve les stashes récents et applique un timeout global de
    docker compose -f jenkins-setup/docker-compose.yml up -d --force-recreate jenkins-docker
    ```
 
-11. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
+   Le même credential doit aussi avoir le droit `read` sur `docker-public`.
+
+12. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
    déploiement et de rollback du dossier `scripts/`. Avant le démarrage, chaque
    script télécharge depuis `docker-hosted` les images de sa version publiée

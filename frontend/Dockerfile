@@ -1,4 +1,5 @@
-FROM node:22-alpine AS build
+ARG DOCKERHUB_PROXY=docker.io
+FROM ${DOCKERHUB_PROXY}/library/node:22-alpine AS build
 
 WORKDIR /app
 
@@ -10,7 +11,7 @@ COPY . .
 RUN npm run build -- --configuration=production
 
 
-FROM nginx:alpine
+FROM ${DOCKERHUB_PROXY}/library/nginx:alpine
 
 RUN rm /etc/nginx/conf.d/default.conf
 

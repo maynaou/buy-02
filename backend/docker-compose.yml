@@ -1,7 +1,7 @@
 services:
 
   kafka:
-    image: apache/kafka:4.1.0
+    image: ${NEXUS_DOCKER_PROXY:-docker.io}/apache/kafka:4.1.0
     ports:
       - "${KAFKA_HOST_PORT:-9092}:9092"
     environment:
@@ -30,7 +30,7 @@ services:
 
 
   mongodb:
-    image: mongo:7
+    image: ${NEXUS_DOCKER_PROXY:-docker.io}/library/mongo:7
 
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
@@ -54,6 +54,8 @@ services:
   discovery-service:
     build:
       context: ./discovery-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-discovery-service:${IMAGE_TAG:-latest}
     ports:
       - "${DISCOVERY_HOST_PORT:-8761}:8761"
@@ -73,6 +75,8 @@ services:
   security-service:
     build:
       context: ./security-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-security-service:${IMAGE_TAG:-latest}
     environment:
       MONGO_USERNAME: ${MONGO_USERNAME}
@@ -100,6 +104,8 @@ services:
   user-service:
     build:
       context: ./user-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-user-service:${IMAGE_TAG:-latest}
     environment:
       MONGO_USERNAME: ${MONGO_USERNAME}
@@ -127,6 +133,8 @@ services:
   product-service:
     build:
       context: ./product-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-product-service:${IMAGE_TAG:-latest}
     environment:
       MONGO_USERNAME: ${MONGO_USERNAME}
@@ -154,6 +162,8 @@ services:
   media-service:
     build:
       context: ./media-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-media-service:${IMAGE_TAG:-latest}
     environment:
       MONGO_USERNAME: ${MONGO_USERNAME}
@@ -181,6 +191,8 @@ services:
   order-service:
     build:
       context: ./order-service
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-order-service:${IMAGE_TAG:-latest}
     environment:
       MONGO_USERNAME: ${MONGO_USERNAME}
@@ -208,6 +220,8 @@ services:
   api-gateway:
     build:
       context: ./api-gateway
+      args:
+        DOCKERHUB_PROXY: ${NEXUS_DOCKER_PROXY:-docker.io}
     image: backend-api-gateway:${IMAGE_TAG:-latest}
     environment:
       SSL_PASSWORD: ${SSL_PASSWORD}
