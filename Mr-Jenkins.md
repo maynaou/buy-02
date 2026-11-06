@@ -85,7 +85,21 @@ concurrentes, conserve les stashes récents et applique un timeout global de
    avec les conteneurs construits. Le script attend que le Gateway réponde, lance
    Playwright et supprime les données créées par le test, y compris si le test
    échoue.
-10. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
+10. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
+   les huit images applicatives dans `docker-hosted` sur `main` et sur les tags
+   de release. Les images `main` sont taguées avec le commit et le numéro de
+   build (`main-<sha>-<build>`),
+   celles d'une release avec sa version (`1.0.0`). Le daemon Docker-in-Docker
+   est configuré pour joindre le connecteur HTTP interne `nexus:8082`. Le
+   credential `nexus-credentials` doit avoir les privilèges `browse`, `read`,
+   `add` et `edit` sur `docker-hosted`. Après modification du Compose, appliquez
+   la configuration en recréant le daemon :
+
+   ```bash
+   docker compose -f jenkins-setup/docker-compose.yml up -d --force-recreate jenkins-docker
+   ```
+
+11. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
    déploiement et de rollback du dossier `scripts/`.
 
@@ -106,7 +120,9 @@ Jenkins découvre les tags GitHub. Le pipeline valide le format
 son workspace, puis publie les releases dans `maven-releases`. Les POMs du
 dépôt Git ne sont pas modifiés. Configurez pour `nexus-credentials` les droits
 `browse`, `read`, `add` et `edit` sur `maven-releases` ; le dépôt release doit
-refuser le redéploiement d’une version déjà publiée.
+refuser le redéploiement d’une version déjà publiée. Après les tests E2E, les
+images Docker de cette release sont également publiées dans `docker-hosted`
+avec le même numéro de version.
 
 ## Tests E2E dans DinD
 

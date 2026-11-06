@@ -272,6 +272,71 @@ stage('Backend SonarQube Analysis') {
             }
         }
 
+        stage('Publish Docker Images to Nexus') {
+            when {
+                anyOf {
+                    branch 'main'
+                    buildingTag()
+                }
+            }
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_USERNAME',
+                        passwordVariable: 'NEXUS_PASSWORD'
+                    )
+                ]) {
+                    script {
+                        def dockerTag = env.TAG_NAME ? env.TAG_NAME.substring(1) : "main-${env.GIT_COMMIT.take(12)}-${env.BUILD_NUMBER}"
+                        withEnv(["NEXUS_DOCKER_TAG=${dockerTag}"]) {
+                            def pushStatus = sh(
+                                returnStatus: true,
+                                script: '''
+                                    set +x
+                                    registry=nexus:8082
+                                    printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
+                                      --username "$NEXUS_USERNAME" --password-stdin
+
+                                    push_status=0
+                                    for image in \
+                                      backend-api-gateway \
+                                      backend-discovery-service \
+                                      backend-media-service \
+                                      backend-product-service \
+                                      backend-security-service \
+                                      backend-user-service \
+                                      backend-order-service \
+                                      frontend-app
+                                    do
+                                      docker tag "$image:$IMAGE_TAG" \
+                                        "$registry/buy-02/$image:$NEXUS_DOCKER_TAG" || {
+                                          push_status=$?
+                                          break
+                                        }
+                                      docker push "$registry/buy-02/$image:$NEXUS_DOCKER_TAG" || {
+                                          push_status=$?
+                                          break
+                                        }
+                                    done
+
+                                    docker logout "$registry" >/dev/null
+                                    logout_status=$?
+                                    if [ "$push_status" -ne 0 ]; then
+                                      exit "$push_status"
+                                    fi
+                                    exit "$logout_status"
+                                '''
+                            )
+                            if (pushStatus != 0) {
+                                error("La publication des images Docker dans Nexus a échoué (code ${pushStatus}).")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Deploy Backend') {
             when {
                 branch 'main'

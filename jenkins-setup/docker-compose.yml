@@ -4,7 +4,7 @@ services:
     image: docker:dind
     container_name: jenkins-docker
     privileged: true
-    command: --storage-driver overlay2
+    command: --storage-driver overlay2 --insecure-registry=nexus:8082
     environment:
       DOCKER_TLS_CERTDIR: /certs
     networks:
