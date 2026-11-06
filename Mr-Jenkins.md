@@ -68,9 +68,10 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 3. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
    configuration Cloudinary à partir des credentials Jenkins via
    [`scripts/prepare-secrets.sh`](./scripts/prepare-secrets.sh).
-4. **Backend Unit & Integration Tests** — lance `./mvnw clean package` en
-   parallèle via le miroir Nexus pour les sept services backend. Les JAR testés
-   sont réutilisés pour construire les images runtime.
+4. **Backend Unit & Integration Tests** — lance `./mvnw clean package` via le
+   miroir Nexus pour les sept services backend, un à la fois pour éviter de
+   surcharger le daemon Docker partagé par Testcontainers. Les JAR testés sont
+   réutilisés pour construire les images runtime.
 5. **Backend SonarQube Analysis** — analyse les sept services et attend leur
    Quality Gate.
 6. **Frontend Unit & Integration Tests** — exécute `npm ci`, puis les tests

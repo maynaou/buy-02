@@ -132,15 +132,11 @@ pipeline {
         stage('Backend Unit & Integration Tests') {
             steps {
                 script {
-                    def tests = [:]
-                    BACKEND_SERVICES.each {  service -> tests[service] = {
+                    BACKEND_SERVICES.each { service ->
                         dir("backend/${service}") {
                             sh './mvnw -s "$WORKSPACE/nexus-maven-settings.xml" clean package'
                         }
                     }
-                }
-                tests.failFast = true 
-                parallel tests
                 }
             }
         }
