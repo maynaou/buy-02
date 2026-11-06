@@ -49,54 +49,7 @@ pipeline {
 
         stage('Prepare Nexus Maven Settings') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'nexus-credentials',
-                        usernameVariable: 'NEXUS_USERNAME',
-                        passwordVariable: 'NEXUS_PASSWORD'
-                    )
-                ]) {
-                    script {
-                        def escapeXml = { value ->
-                            value.replace('&', '&amp;')
-                                .replace('<', '&lt;')
-                                .replace('>', '&gt;')
-                                .replace('"', '&quot;')
-                                .replace("'", '&apos;')
-                        }
-                        writeFile(
-                            file: 'nexus-maven-settings.xml',
-                            text: """<settings>
-  <mirrors>
-    <mirror>
-      <id>nexus-maven-public</id>
-      <mirrorOf>*</mirrorOf>
-      <url>http://nexus:8081/repository/maven-public/</url>
-    </mirror>
-  </mirrors>
-  <servers>
-    <server>
-      <id>nexus-maven-public</id>
-      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
-      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
-    </server>
-    <server>
-      <id>nexus-snapshots</id>
-      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
-      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
-    </server>
-    <server>
-      <id>nexus-releases</id>
-      <username>${escapeXml(env.NEXUS_USERNAME)}</username>
-      <password>${escapeXml(env.NEXUS_PASSWORD)}</password>
-    </server>
-  </servers>
-</settings>
-"""
-                        )
-                        sh 'chmod 600 "$WORKSPACE/nexus-maven-settings.xml"'
-                    }
-                }
+                sh 'chmod 600 "$WORKSPACE/settings.xml"'
             }
         }
 
@@ -131,10 +84,20 @@ pipeline {
 
         stage('Backend Unit & Integration Tests') {
             steps {
-                script {
-                    BACKEND_SERVICES.each { service ->
-                        dir("backend/${service}") {
-                            sh './mvnw -s "$WORKSPACE/nexus-maven-settings.xml" clean package'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-credentials',
+                        usernameVariable: 'NEXUS_CI_USER',
+                        passwordVariable: 'NEXUS_CI_PASSWORD'
+                    )
+                ]) {
+                    withEnv(['NEXUS_URL=http://nexus:8081']) {
+                        script {
+                            BACKEND_SERVICES.each { service ->
+                                dir("backend/${service}") {
+                                    sh './mvnw -s "$WORKSPACE/settings.xml" clean package'
+                                }
+                            }
                         }
                     }
                 }
@@ -143,23 +106,33 @@ pipeline {
 
 stage('Backend SonarQube Analysis') {
     steps {
-        script {
-            BACKEND_SERVICES.each { service ->
-                dir("backend/${service}") {
-                    echo "🔎 SonarQube: ${service}"
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'nexus-credentials',
+                usernameVariable: 'NEXUS_CI_USER',
+                passwordVariable: 'NEXUS_CI_PASSWORD'
+            )
+        ]) {
+            withEnv(['NEXUS_URL=http://nexus:8081']) {
+                script {
+                    BACKEND_SERVICES.each { service ->
+                        dir("backend/${service}") {
+                            echo "🔎 SonarQube: ${service}"
 
-                    withSonarQubeEnv('SonarQube') {
-                        sh """
-                            ./mvnw -s "$WORKSPACE/nexus-maven-settings.xml" \
-                            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-                            -Dsonar.projectKey=buy-02-${service} \
-                            -Dsonar.projectName=buy-02-${service} \
-                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-                        """
-                    }
+                            withSonarQubeEnv('SonarQube') {
+                                sh """
+                                    ./mvnw -s "$WORKSPACE/settings.xml" \
+                                    org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                                    -Dsonar.projectKey=buy-02-${service} \
+                                    -Dsonar.projectName=buy-02-${service} \
+                                    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                                """
+                            }
 
-                    timeout(time: 5, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: true
+                            timeout(time: 5, unit: 'MINUTES') {
+                                waitForQualityGate abortPipeline: true
+                            }
+                        }
                     }
                 }
             }
@@ -210,46 +183,42 @@ stage('Backend SonarQube Analysis') {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'nexus-credentials',
-                        usernameVariable: 'NEXUS_USERNAME',
-                        passwordVariable: 'NEXUS_PASSWORD'
+                        usernameVariable: 'NEXUS_CI_USER',
+                        passwordVariable: 'NEXUS_CI_PASSWORD'
                     )
                 ]) {
-                    script {
-                        def releaseTag = env.TAG_NAME
-                        def isRelease = releaseTag != null && !releaseTag.isEmpty()
-                        def releaseVersion
-                        if (isRelease) {
-                            if (!(releaseTag ==~ /^v\d+\.\d+\.\d+$/)) {
-                                error("Tag de release invalide : ${releaseTag}. Format attendu : vMAJOR.MINOR.PATCH (ex. v1.0.0).")
+                    withEnv(['NEXUS_URL=http://nexus:8081']) {
+                        script {
+                            def releaseTag = env.TAG_NAME
+                            def isRelease = releaseTag != null && !releaseTag.isEmpty()
+                            def releaseVersion
+                            if (isRelease) {
+                                if (!(releaseTag ==~ /^v\d+\.\d+\.\d+$/)) {
+                                    error("Tag de release invalide : ${releaseTag}. Format attendu : vMAJOR.MINOR.PATCH (ex. v1.0.0).")
+                                }
+                                releaseVersion = releaseTag.substring(1)
                             }
-                            releaseVersion = releaseTag.substring(1)
-                        }
-                        try {
                             BACKEND_SERVICES.each { service ->
                                 dir("backend/${service}") {
                                     if (isRelease) {
                                         withEnv(["RELEASE_VERSION=${releaseVersion}"]) {
                                             sh '''
-                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" \
+                                                ./mvnw -B -s "$WORKSPACE/settings.xml" \
                                                   org.codehaus.mojo:versions-maven-plugin:2.19.1:set \
                                                   -DnewVersion="$RELEASE_VERSION" \
                                                   -DgenerateBackupPoms=false
-                                                ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" clean deploy \
-                                                  -DskipTests \
-                                                  -DaltReleaseDeploymentRepository=nexus-releases::http://nexus:8081/repository/maven-releases/
+                                                ./mvnw -B -s "$WORKSPACE/settings.xml" clean deploy \
+                                                  -DskipTests
                                             '''
                                         }
                                     } else {
                                         sh '''
-                                            ./mvnw -B -s "$WORKSPACE/nexus-maven-settings.xml" deploy \
-                                              -DskipTests \
-                                              -DaltSnapshotDeploymentRepository=nexus-snapshots::http://nexus:8081/repository/maven-snapshots/
+                                            ./mvnw -B -s "$WORKSPACE/settings.xml" deploy \
+                                              -DskipTests
                                         '''
                                     }
                                 }
                             }
-                        } finally {
-                            sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
                         }
                     }
                 }
@@ -456,7 +425,6 @@ stage('Backend SonarQube Analysis') {
 
     post {
         always {
-            sh 'rm -f "$WORKSPACE/nexus-maven-settings.xml"'
             junit(
                 allowEmptyResults: true,
                 testResults:

@@ -15,6 +15,6 @@ for service in "${services[@]}"; do
     echo "Packaging backend/$service"
     (
         cd "backend/$service"
-        ./mvnw -B clean package -DskipTests
+        ./mvnw -B -s ../../settings.xml clean package -DskipTests
     )
 done

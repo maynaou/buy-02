@@ -341,60 +341,39 @@ contournant le cache Maven. Pour un build local, `bash ./scripts/package-backend
 construit les JAR avant `docker compose up --build`. Leurs versions actuelles
 finissent par `-SNAPSHOT` : publie-les donc dans `maven-snapshots`.
 
-Configure d’abord `~/.m2/settings.xml` avec un compte Nexus autorisé à publier.
-Le miroir fait passer la résolution Maven par `maven-public` ; les IDs des
-serveurs d’authentification doivent correspondre aux IDs utilisés pour la
-résolution et le déploiement. Ne commite pas ce fichier ni les identifiants.
-Pour une installation locale, utilise `localhost`; Jenkins utilise le nom
-interne `nexus` :
+Le fichier [`settings.xml`](../settings.xml) du projet configure le miroir Maven
+et lit l’URL et les identifiants depuis l’environnement : aucun secret n’est
+stocké dans Git. Avant d’utiliser Maven localement, définis :
 
-```xml
-<settings>
-  <mirrors>
-    <mirror>
-      <id>nexus-maven-public</id>
-      <mirrorOf>*</mirrorOf>
-      <url>http://localhost:8081/repository/maven-public/</url>
-    </mirror>
-  </mirrors>
-  <servers>
-    <server>
-      <id>nexus-maven-public</id>
-      <username>UTILISATEUR_NEXUS</username>
-      <password>MOT_DE_PASSE_NEXUS</password>
-    </server>
-    <server>
-      <id>nexus-snapshots</id>
-      <username>UTILISATEUR_NEXUS</username>
-      <password>MOT_DE_PASSE_NEXUS</password>
-    </server>
-    <server>
-      <id>nexus-releases</id>
-      <username>UTILISATEUR_NEXUS</username>
-      <password>MOT_DE_PASSE_NEXUS</password>
-    </server>
-  </servers>
-</settings>
+```bash
+export NEXUS_URL=http://localhost:8081
+export NEXUS_CI_USER=UTILISATEUR_NEXUS
+export NEXUS_CI_PASSWORD
+read -rsp 'Mot de passe Nexus: ' NEXUS_CI_PASSWORD
+echo
 ```
+
+Le miroir fait passer la résolution par `maven-public`. Les IDs des serveurs
+`nexus-releases` et `nexus-snapshots` doivent correspondre aux IDs de
+`distributionManagement` des POMs. Jenkins fournit ces mêmes variables au
+fichier `settings.xml` avec l’URL interne `http://nexus:8081`.
 
 Par exemple, pour construire et publier `api-gateway`, exécute depuis
 `backend/api-gateway` :
 
 ```bash
-./mvnw -B clean package
-./mvnw -B org.apache.maven.plugins:maven-deploy-plugin:3.1.3:deploy-file \
-  -Dfile=target/api-gateway-0.0.1-SNAPSHOT.jar \
-  -DpomFile=pom.xml \
-  -DrepositoryId=nexus-snapshots \
-  -Durl=http://localhost:8081/repository/maven-snapshots/
+./mvnw -B -s ../../settings.xml clean deploy
 ```
 
-La première commande exécute les tests et crée le JAR dans `target/`. La
-seconde publie le JAR et son POM dans Nexus. Répète ces commandes depuis le
-dossier de chaque service backend, en adaptant le nom et la version du JAR au
-`pom.xml` du service. Pour une version release (sans `-SNAPSHOT`), utilise
-`nexus-releases` dans `settings.xml` et l’URL
-`http://localhost:8081/repository/maven-releases/`.
+Maven exécute les tests, crée le JAR dans `target/`, puis choisit automatiquement
+`maven-snapshots` pour une version `-SNAPSHOT` ou `maven-releases` pour une
+version stable. Les POMs de chacun des sept services contiennent ces URL dans
+`distributionManagement`. Pour construire les JARs localement en passant par
+le miroir Nexus, exécute depuis la racine du dépôt :
+
+```bash
+bash ./scripts/package-backend.sh
+```
 
 Vérifie ensuite dans l’interface Nexus que l’artefact apparaît sous
 **Browse → maven-snapshots**.

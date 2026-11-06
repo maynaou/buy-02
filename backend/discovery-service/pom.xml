@@ -26,6 +26,16 @@
 		<tag/>
 		<url/>
 	</scm>
+	<distributionManagement>
+		<repository>
+			<id>nexus-releases</id>
+			<url>${env.NEXUS_URL}/repository/maven-releases/</url>
+		</repository>
+		<snapshotRepository>
+			<id>nexus-snapshots</id>
+			<url>${env.NEXUS_URL}/repository/maven-snapshots/</url>
+		</snapshotRepository>
+	</distributionManagement>
 	<properties>
 		<java.version>17</java.version>
 		<spring-cloud.version>2025.1.2</spring-cloud.version>

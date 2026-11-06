@@ -62,9 +62,9 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 30 minutes.
 
 1. **Checkout** — récupère la révision sélectionnée par le job multibranch.
-2. **Prepare Nexus Maven Settings** — crée un `settings.xml` temporaire avec
-   `maven-public` comme miroir de tous les dépôts Maven et les credentials de
-   lecture/publication. Le fichier est supprimé à la fin du build.
+2. **Prepare Nexus Maven Settings** — utilise le fichier versionné
+   [`settings.xml`](./settings.xml), qui définit `maven-public` comme miroir ;
+   Jenkins fournit l’URL et les credentials via variables d’environnement.
 3. **Prepare Secrets** — écrit les clés JWT, les certificats TLS et la
    configuration Cloudinary à partir des credentials Jenkins via
    [`scripts/prepare-secrets.sh`](./scripts/prepare-secrets.sh).
@@ -79,7 +79,8 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 7. **Frontend SonarQube Analysis** — analyse le frontend et attend son Quality
    Gate.
 8. **Publish Backend Artifacts to Nexus** — sur `main`, publie les JARs des
-   sept services backend dans `maven-snapshots`. Sur un tag de release
+   sept services backend dans    `maven-snapshots`. Chaque POM définit `distributionManagement`, de sorte que
+   Maven choisit le dépôt selon la version. Sur un tag de release
    `vMAJOR.MINOR.PATCH`, publie les mêmes services dans `maven-releases` avec
    une version Maven sans le préfixe `v`. Le credential Jenkins
    `nexus-credentials` fournit l’authentification ; Nexus est joint sur
