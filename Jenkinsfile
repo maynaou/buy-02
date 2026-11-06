@@ -362,6 +362,7 @@ pipeline {
                 }
             }
         }
+    }
 
     post {
         always {
@@ -401,6 +402,4 @@ pipeline {
             )
         }
     }
-}
-
 }
