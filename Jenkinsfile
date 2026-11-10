@@ -255,7 +255,7 @@ pipeline {
                         passwordVariable: 'NEXUS_PASSWORD'
                     )
                 ]) {
-                    sh 'bash ./scripts/run-e2e-tests-with-nexus.sh'
+                    sh 'bash ./scripts/e2e-tests.sh'
                 }
             }
         }

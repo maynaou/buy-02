@@ -12,8 +12,7 @@ if [[ -z "${NEXUS_USERNAME:-}" || -z "${NEXUS_PASSWORD:-}" ]]; then
     exit 1
 fi
 
-registry=nexus:8082
-proxy_registry=nexus:8084
+read_registry=nexus:8084
 case "${1:-}" in
     backend)
         images=(
@@ -35,14 +34,12 @@ case "${1:-}" in
         ;;
 esac
 
-trap 'docker logout "$registry" >/dev/null 2>&1 || true; docker logout "$proxy_registry" >/dev/null 2>&1 || true' EXIT
-printf '%s' "$NEXUS_PASSWORD" | docker login "$registry" \
-    --username "$NEXUS_USERNAME" --password-stdin
-printf '%s' "$NEXUS_PASSWORD" | docker login "$proxy_registry" \
+trap 'docker logout "$read_registry" >/dev/null 2>&1 || true' EXIT
+printf '%s' "$NEXUS_PASSWORD" | docker login "$read_registry" \
     --username "$NEXUS_USERNAME" --password-stdin
 
 for image in "${images[@]}"; do
-    remote_image="$registry/buy-02/$image:$NEXUS_DOCKER_TAG"
+    remote_image="$read_registry/buy-02/$image:$NEXUS_DOCKER_TAG"
     local_image="$image:$IMAGE_TAG"
     docker pull "$remote_image"
     docker tag "$remote_image" "$local_image"

@@ -337,9 +337,10 @@ Les services backend de ce projet sont des applications Spring Boot empaquetées
 en JAR (aucun service ne configure le packaging WAR). Le pipeline construit et
 teste les JAR avec Maven via `maven-public`, puis copie ces mêmes JAR dans les
 images runtime Java ; les images ne reconstruisent pas les services en
-contournant le cache Maven. Pour un build local, `bash ./scripts/package-backend.sh`
-construit les JAR avant `docker compose up --build`. Leurs versions actuelles
-finissent par `-SNAPSHOT` : publie-les donc dans `maven-snapshots`.
+contournant le cache Maven. Pour un build local, construis les JAR avant
+`docker compose up --build`, en exécutant Maven dans chaque module backend.
+Leurs versions actuelles finissent par `-SNAPSHOT` : publie-les donc dans
+`maven-snapshots`.
 
 Le fichier [`settings.xml`](../settings.xml) du projet configure le miroir Maven
 et lit l’URL et les identifiants depuis l’environnement : aucun secret n’est
@@ -369,10 +370,12 @@ Maven exécute les tests, crée le JAR dans `target/`, puis choisit automatiquem
 `maven-snapshots` pour une version `-SNAPSHOT` ou `maven-releases` pour une
 version stable. Les POMs de chacun des sept services contiennent ces URL dans
 `distributionManagement`. Pour construire les JARs localement en passant par
-le miroir Nexus, exécute depuis la racine du dépôt :
+le miroir Nexus, exécute cette commande depuis la racine du dépôt :
 
 ```bash
-bash ./scripts/package-backend.sh
+for service in api-gateway discovery-service media-service product-service security-service user-service order-service; do
+  (cd "backend/$service" && ./mvnw -B -s ../../settings.xml clean package -DskipTests)
+done
 ```
 
 Vérifie ensuite dans l’interface Nexus que l’artefact apparaît sous

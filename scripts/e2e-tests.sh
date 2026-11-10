@@ -3,6 +3,9 @@ set -eu
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 image_tag="${IMAGE_TAG:-latest}"
+nexus_docker_proxy="${NEXUS_DOCKER_PROXY:?NEXUS_DOCKER_PROXY must be set}"
+: "${NEXUS_USERNAME:?NEXUS_USERNAME must be set}"
+: "${NEXUS_PASSWORD:?NEXUS_PASSWORD must be set}"
 
 e2e_project_prefix="e2e-${BUILD_NUMBER:-0}-$$"
 backend_project="${e2e_project_prefix}-backend"
@@ -33,10 +36,20 @@ cleanup_e2e_environment() {
         fi
     fi
 
+    if ! docker logout "$nexus_docker_proxy" >/dev/null 2>&1; then
+        echo "Failed to log out from Nexus Docker proxy" >&2
+        if [ "$test_status" -eq 0 ]; then
+            test_status=1
+        fi
+    fi
+
     exit "$test_status"
 }
 
 trap cleanup_e2e_environment EXIT
+
+printf '%s' "$NEXUS_PASSWORD" | docker login "$nexus_docker_proxy" \
+    --username "$NEXUS_USERNAME" --password-stdin
 
 cd "$repo_root/frontend"
 docker compose --project-name "$frontend_project" up --no-build -d --wait --wait-timeout 420

@@ -87,9 +87,8 @@ concurrentes, conserve les stashes récents et applique un timeout global de
    [`scripts/build-docker-images.sh`](./scripts/build-docker-images.sh), puis
    conserve le tag de build pour les étapes suivantes. Les images de base et
    les images Kafka/MongoDB passent par `docker-public` sur `nexus:8084`.
-9. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh)
-   via [`scripts/run-e2e-tests-with-nexus.sh`](./scripts/run-e2e-tests-with-nexus.sh),
-   qui gère l’accès au proxy Docker. Le test attend que le Gateway réponde, lance
+9. **End-to-End Tests** — exécute [`scripts/e2e-tests.sh`](./scripts/e2e-tests.sh),
+   qui gère l’accès au proxy Docker, attend que le Gateway réponde, lance
    Playwright et supprime les données créées, même en cas d’échec.
 10. **Publish Docker Images to Nexus** — après les tests E2E réussis, publie
    les huit images applicatives avec
@@ -111,7 +110,7 @@ concurrentes, conserve les stashes récents et applique un timeout global de
 11. **Deploy Backend**, **Deploy Frontend**, **cleanUp** — exécutés uniquement
    sur la branche `main`. Les étapes de déploiement utilisent les scripts de
    déploiement et de rollback du dossier `scripts/`. Avant le démarrage, chaque
-   script télécharge depuis `docker-hosted` les images de sa version publiée
+   script télécharge via `docker-public` les images de sa version publiée
    (JAR déjà inclus dans les images), les retague au format local du Compose,
    puis démarre les conteneurs. Les tags Nexus de la dernière version saine sont
    conservés pour permettre un rollback en téléchargeant à nouveau les images

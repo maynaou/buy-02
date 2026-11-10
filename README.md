@@ -88,11 +88,8 @@ Ne placez pas de secrets réels dans les fichiers suivis par Git.
 
 1. Configurez les variables Compose et les clés/certificats requis. Les
    paramètres backend sont documentés dans le [README backend](./backend/README.md).
-2. Construisez les JAR backend, nécessaires aux images Docker :
-
-   ```bash
-   bash ./scripts/package-backend.sh
-   ```
+2. Construisez les JAR backend nécessaires aux images Docker depuis chaque
+   module backend avec Maven.
 
 3. Démarrez les services backend :
 
