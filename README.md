@@ -60,10 +60,12 @@ Le [README backend](./backend/README.md) décrit les flux entre topics et servic
 backend/                 Services Spring Boot et Docker Compose
 frontend/                Application Angular et tests Playwright
 jenkins-setup/           Docker Compose, configuration Jenkins et SonarQube
+nexus/                   Configuration Docker Compose et captures Nexus
 scripts/                 Préparation des secrets, E2E et déploiement
 Jenkinsfile              Pipeline CI/CD
 Mr-Jenkins.md            Guide de l’infrastructure et du pipeline Jenkins
 Mr-SonarQube.md          Guide de l’analyse SonarQube
+Mr-Nexus.md              Guide de Nexus, des dépôts et des publications
 ```
 
 ## Stack technique
@@ -161,6 +163,7 @@ E2E. Les étapes de déploiement backend/frontend ne s’exécutent que sur `mai
 
 - [Guide Jenkins](./Mr-Jenkins.md)
 - [Guide SonarQube](./Mr-SonarQube.md)
+- [Guide Nexus](./Mr-Nexus.md)
 
 ## Arrêt des services
 
