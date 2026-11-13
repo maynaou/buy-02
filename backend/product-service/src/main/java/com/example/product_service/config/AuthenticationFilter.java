@@ -21,7 +21,7 @@ public class AuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
-        String userId = "95da6457-d15e-4c6a-bd73-67e19b275fab";
+        String userId = "seller-123";
         String role = req.getHeader("X-User-Role");
 
         if (userId != null && role != null) {
